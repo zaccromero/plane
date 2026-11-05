@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+import os,sys
+from pathlib import Path
+binding=os.environ.get('DRAKO_PLANE_BINDING')
+if not binding:raise SystemExit('Set DRAKO_PLANE_BINDING to the private Plane binding file')
+os.execv(sys.executable,[sys.executable,str(Path(__file__).resolve().parent/'agent_lane.py'),'--binding',binding,*sys.argv[1:]])
