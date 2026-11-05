@@ -38,7 +38,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_fixed_check(self):
         argv=common.check_argv({'workload':'/guard','python':'/python3.14'})
-        self.assertEqual(argv[:3],['/guard','/python3.14','-B'])
+        self.assertEqual(argv[:4],['/guard','run','/python3.14','-B'])
         self.assertEqual(argv[-2:],['test_stage.py','-v'])
 
     def test_unknown_execution_never_relaunches(self):

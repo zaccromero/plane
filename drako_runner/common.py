@@ -67,7 +67,7 @@ def load_job(directory):
 
 def check_argv(c):
     # There is no command, path, environment or URL argument supplied by a model/ticket.
-    return [c['workload'], c['python'], '-B', '-m', 'unittest', 'discover', '-s', 'drako', '-p', 'test_stage.py', '-v']
+    return [c['workload'], 'run', c['python'], '-B', '-m', 'unittest', 'discover', '-s', 'drako', '-p', 'test_stage.py', '-v']
 
 
 def check_result(directory, job):
