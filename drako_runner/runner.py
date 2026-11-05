@@ -30,6 +30,18 @@ def validate_inventory(tools):
     need(set(tools) == TOOLS, 'Native tool inventory is not the exact three approved capabilities')
 
 
+def review_transition(phase, ticket, rows):
+    review = next(x for x in rows if x['name'] == 'Owner Review')
+    if phase == 'published':
+        # A repeated receipt query must never reopen owner-accepted work.
+        need(any(x['id'] == ticket['state'] and (x['id'] == review['id'] or x.get('group') == 'completed') for x in rows),
+             'Published ticket was moved; reconcile without overwriting owner state')
+        return None
+    need(any(x['id'] == ticket['state'] and x.get('group') != 'completed' for x in rows),
+         'Ticket already completed; preserve owner state and reconcile')
+    return review['id'] if ticket['state'] != review['id'] else None
+
+
 def doctor(c):
     r = subprocess.run([c['python'], '-B', c['doctor'], 'doctor', '--project', str(ROOT), '--engine', 'claude'],
         capture_output=True, text=True, timeout=30)
@@ -141,10 +153,14 @@ def execute(d, job, c, state):
 
 def publish(d, job, c, state):
     need(state['phase'] in {'executed','published'}, 'Unknown or live execution; never relaunch implicitly')
+    client=load_binding(c['binding'])
+    ticket=client.get(job['ticket_id'])
+    need(ticket_context(ticket) == private_json(d/'ticket-context.json'), 'Ticket contract changed before publication')
+    states=client.request('GET','/states/');rows=states if isinstance(states,list) else states.get('results',[])
+    target=review_transition(state['phase'], ticket, rows)
     check=check_result(d,job);report=private_json(d/'results/report.json')
     need(report['run_id']==job['run_id'] and report['context_sha256']==job['context_sha256']
          and report['check_sha256']==payload_hash(check),'Bound worker report mismatch')
-    sys.path.insert(0,str(Path(c['session']).resolve().parents[0]))
     sys.path.insert(0,c['hermes_source'])
     from hermes_cli.agent_tasks import ControllerSupervisor
     with ControllerSupervisor(board='default',board_db=Path(c['board_db']),project_path=ROOT) as sup:
@@ -169,10 +185,12 @@ def publish(d, job, c, state):
         trace_id=payload['trace_id'],score_id=score['score_id'],native_invocations=state['native_invocations'],
         approved_check_invocations=1,native_tools=sorted(TOOLS),python=c['python'],source_head=job['source_head'],owner_acceptance='pending')
     receipt=post_evidence(client,evidence,expected,context,d/'evidence')
-    states=client.request('GET','/states/');rows=states if isinstance(states,list) else states.get('results',[])
-    review=next(x for x in rows if x['name']=='Owner Review')
-    if client.get(job['ticket_id'])['state']!=review['id']:client.update(job['ticket_id'],{'state':review['id']})
-    need(client.get(job['ticket_id'])['state']==review['id'],'Ticket review state not confirmed')
+    fresh=client.get(job['ticket_id'])
+    need(ticket_context(fresh) == private_json(d/'ticket-context.json'), 'Ticket changed during publication')
+    target=review_transition(state['phase'], fresh, rows)
+    if target:
+        client.update(job['ticket_id'],{'state':target})
+        need(client.get(job['ticket_id'])['state']==target,'Ticket review state not confirmed')
     atomic(d/'evaluation.json',evidence);atomic(d/'trace-receipt.json',trace);atomic(d/'score-receipt.json',score)
     state.update(phase='published',comment_id=receipt['comment_id'],trace_id=payload['trace_id'],score_id=score['score_id'])
     atomic(d/'state.json',state)

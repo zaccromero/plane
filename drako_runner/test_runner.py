@@ -36,6 +36,14 @@ class RunnerTests(unittest.TestCase):
             self.assertFalse(tool['inputSchema']['additionalProperties'])
             self.assertEqual(tool['inputSchema']['properties'],{})
 
+    def test_recovery_preserves_owner_acceptance(self):
+        rows=[{'id':'review','name':'Owner Review','group':'started'}, {'id':'done','name':'Done','group':'completed'}, {'id':'todo','name':'Todo','group':'unstarted'}]
+        self.assertIsNone(runner.review_transition('published', {'state':'done'}, rows))
+        self.assertIsNone(runner.review_transition('published', {'state':'review'}, rows))
+        with self.assertRaises(RuntimeError):runner.review_transition('executed', {'state':'done'}, rows)
+        with self.assertRaises(RuntimeError):runner.review_transition('published', {'state':'todo'}, rows)
+        self.assertEqual(runner.review_transition('executed', {'state':'todo'}, rows),'review')
+
     def test_fixed_check(self):
         argv=common.check_argv({'workload':'/guard','python':'/python3.14'})
         self.assertEqual(argv[:4],['/guard','run','/python3.14','-B'])
