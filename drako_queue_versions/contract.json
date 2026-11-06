@@ -1,0 +1,1 @@
+{"schema":"drako.runner-continuation.v1","admission_schema":"drako.queue-admission.v1","job_schema":"drako.project-lane.v1","queue_mode":"active-lane-v1","resilience":"bounded-native-recovery-v1","project":"zaccromero/drako-map","max_tickets":2,"max_native_attempts":3,"max_writes":6,"max_tests":3,"migration":"new successor only; historical jobs retain original runtime"}
