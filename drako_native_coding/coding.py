@@ -47,7 +47,7 @@ def test_outputs(c,d):
  rows=[]
  for index,argv in enumerate(commands(c,d)):
   log=d/'test-scratch'/('test-'+str(time.time_ns())+'-'+str(index)+'.log')
-  def limits():resource.setrlimit(resource.RLIMIT_CPU,(20,20));resource.setrlimit(resource.RLIMIT_FSIZE,(1048576,1048576))
+  def limits():resource.setrlimit(resource.RLIMIT_CPU,(20,20));resource.setrlimit(resource.RLIMIT_FSIZE,(2097152,2097152))
   with log.open('w') as out:r=subprocess.run(argv,cwd=d/'test-scratch',env=dict(os.environ),stdout=out,stderr=subprocess.STDOUT,timeout=90,preexec_fn=limits)
   text=log.read_text();match=re.search(r'Ran (\d+) tests?',text);rows.append({'exit_code':r.returncode,'tests':int(match[1]) if match else 0,'passed':r.returncode==0 and bool(match) and int(match[1])>0 and '\nOK\n' in text and 'skipped' not in text.lower(),'log':str(log),'output':text[-18000:]})
  return rows
