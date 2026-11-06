@@ -17,7 +17,7 @@ def branch_name(name):
 
 def _init(config,tickets,branches,continue_from=None):
  b.need(len(tickets)==len(set(tickets))==len(branches) and 1<=len(tickets)<=2,'One or two distinct owner-admitted tickets required')
- branches=[branch_name(x) for x in branches];b.need(len(set(branches))==2,'Distinct ticket branches required')
+ branches=[branch_name(x) for x in branches];b.need(len(set(branches))==len(branches),'Distinct ticket branches required')
  b.need(not b.git(b.ROOT,'status','--porcelain','--untracked-files=no'),'Clean admitted worktree required')
  parent=None;parent_q=None
  if continue_from:
@@ -29,7 +29,7 @@ def _init(config,tickets,branches,continue_from=None):
   for name in branches:b.need(not b.git(b.ROOT,'branch','--list',name),'Preserve existing successor branch')
  else:
   b.need(b.git(b.ROOT,'branch','--show-current')==branches[0],'Use admitted first branch')
-  b.need(not b.git(b.ROOT,'branch','--list',branches[1]),'Preserve existing second branch')
+  b.need(len(branches)==1 or not b.git(b.ROOT,'branch','--list',branches[1]),'Preserve existing second branch')
  c=b.config(config);client=b.load_binding(c['binding']);contexts=[b.ticket_context(client.get(x)) for x in tickets]
  q=b.ROOT/'.drako/queues'/('queue_'+uuid.uuid4().hex);q.mkdir(parents=True,mode=0o700)
  admission={'schema':'drako.queue-admission.v1','queue_id':q.name,'project_root':str(b.ROOT),'source_repo':b.REPO,'source_head':b.git(b.ROOT,'rev-parse','HEAD'),'runner_head':b.git(DIST,'rev-parse','HEAD'),'config_path':str(Path(config).resolve()),'tickets':contexts,'branches':branches,'fault_plan':['after_tests','after_verified'] if FAULTS else [],'max_tickets':len(tickets),'file_scope':list(b.FILES),'lifecycle':'retain active lane across verified tickets; no owner acceptance or merges','authority':'owner-requested real interrupted ticket qualification in existing lane'}
