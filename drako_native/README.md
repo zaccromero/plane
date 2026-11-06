@@ -1,0 +1,13 @@
+# Fresh context and native project checks
+
+Reuses the installed `context-for-cwd.py` SessionStart loader, local-only curated packs, managed `agent-session`, existing native subscriptions, native ownership controller and Plane trace/evidence transport.
+
+`fresh_runner.py prepare --config PRIVATE_CONFIG --ticket UUID --profile drako-tools|drako-map --engine claude|codex` gathers a current source receipt and task-specific input hashes. `fresh_runner.py run RUN_DIRECTORY` executes that bounded assignment. Startup must supply the receipt before model tools; no receipt or drift holds the run. Old curated text is dated guidance, not live authority. A current Git receipt does not certify arbitrary untracked bytes, semantic correctness or deployment.
+
+The model calls only fixed ticket-read, approved-check and result capabilities. Claude has an empty builtin tool list and exact allowed MCP tools. Codex uses its native read-only sandbox and the task MCP; other configured MCPs may initialize, but any unrelated tool use is rejected by the run monitor. Monitoring is observation, not a stronger filesystem boundary. No permission bypass, copied credential or API-billing fallback. Native actors claim only their own run result directory; source reservations are untouched. Fixed tests use existing local Node and mocked providers, never commands inferred from ticket text.
+
+`batch.py --ticket UUID` runs Codex/drako-tools then Claude/drako-map sequentially, freshly preparing context at each dispatch. It prints and retains a private batch state path. Repeat with `--state SAME_PATH` to read an already-published batch without launching models/tests again. A live or uncertain native outcome holds; it is not automatically replayed. The existing legacy recovery/coding queues remain installed separately.
+
+Admitted checks are the existing drako-tools reference guard suite and drako-map route/ORS/snap tests. Arbitrary product coding, fleet-wide project qualification, automatic merge, production release, VM/Cloudflare execution and Mac-off operation are not supplied by this catalog. The existing coding/PR adapters remain separate. Installed source is a candidate until its specific PR is merged.
+
+Gate: Python 3.14 `python3 -B -m unittest discover -s drako_native -v`, composed with the unchanged `drako` and `drako_runner` gates. Actual native acceptance, backend trace/score reads, exact source receipts and idempotent Plane evidence are separate required proof. Failed native attempts and partial preparation records remain retained; success requires real test/report artifacts, not CLI exit zero.
