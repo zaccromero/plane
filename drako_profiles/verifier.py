@@ -3,7 +3,7 @@ import hashlib,io,json,os,shutil,subprocess,tarfile
 from pathlib import Path
 
 def host_profile(snapshot,scratch,node):
- reads=[str(snapshot),str(Path(node).resolve().parent.parent),'/System','/usr','/opt/homebrew','/Library','/private/etc','/private/var/db','/private/preboot','/dev']
+ reads=[str(snapshot),str(scratch),str(Path(node).resolve().parent.parent),'/System','/usr','/opt/homebrew','/Library','/private/etc','/private/var/db','/private/preboot','/dev']
  allow=' '.join('(subpath '+json.dumps(p)+')' for p in reads)
  literals={str(p) for v in [snapshot,scratch,Path(node).resolve()] for p in v.parents}
  allow += ' '+ ' '.join('(literal '+json.dumps(p)+')' for p in sorted(literals))
@@ -29,15 +29,16 @@ def verify(d,j,c,root):
  (scratch/'original.test.ts').write_text(baseline[a.FILES[1]]['content'].replace('../src/profile.js','./profile.ts'))
  (scratch/'acceptance.test.mjs').write_bytes(Path(__file__).with_name('acceptance.test.mjs').read_bytes())
  (scratch/'source-policy.mjs').write_bytes(Path(__file__).with_name('source-policy.mjs').read_bytes())
- sb=scratch/'host.sb';sb.write_text(host_profile(snapshot,scratch,c['node']))
+ sb=host_profile(snapshot,scratch,c['node'])
  env={'PATH':str(Path(c['node']).parent)+':/usr/bin:/bin','HOME':str(scratch),'TMPDIR':str(scratch),'LANG':'en_US.UTF-8','DRAKO_TARGET_SOURCE':str(scratch/'profile.ts')}
  node=c['node'];npm=str(Path(node).with_name('npm'))
  commands=[('source-policy',[node,str(scratch/'source-policy.mjs'),str(snapshot/a.FILES[0]),str(snapshot/'node_modules/typescript/lib/typescript.js')]),('independent',[node,'--experimental-strip-types','--experimental-test-isolation=none','--test',str(scratch/'acceptance.test.mjs'),str(scratch/'original.test.ts')]),('typecheck',[npm,'run','typecheck','-w','packages/elevation']),('build',[npm,'run','build','-w','packages/elevation']),('canonical-tests',[npm,'test','-w','packages/elevation']),('lint',[npm,'run','lint'])]
  receipts=[]
  for name,argv in commands:
-  log=scratch/(name+'.log')
+  logs=d/'verification-logs';logs.mkdir(mode=0o700,exist_ok=True)
+  log=logs/(name+'.log')
   with open(log,'w') as out:
-   r=subprocess.run([c['workload'],'run','/usr/bin/env','-i',*[k+'='+v for k,v in env.items()],'/usr/bin/sandbox-exec','-f',str(sb),*argv],cwd=snapshot,env=dict(os.environ),stdout=out,stderr=subprocess.STDOUT,timeout=180)
+   r=subprocess.run([c['workload'],'run','/usr/bin/env','-i',*[k+'='+v for k,v in env.items()],'/usr/bin/sandbox-exec','-p',sb,*argv],cwd=snapshot,env=dict(os.environ),stdout=out,stderr=subprocess.STDOUT,timeout=180)
   text=log.read_text();ok=r.returncode==0
   if name in ['independent','canonical-tests']:ok=ok and a.tap_pass(text,r.returncode)
   receipts.append({'gate':name,'exit_code':r.returncode,'status':'PASS' if ok else 'FAIL','log':str(log),'sha256':hashlib.sha256(log.read_bytes()).hexdigest()})
