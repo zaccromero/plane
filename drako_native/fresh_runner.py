@@ -1,9 +1,9 @@
 """Current-context-bound native project checks, reusing managed sessions and Plane evidence."""
-import argparse,fcntl,hashlib,importlib.util,json,os,queue,re,subprocess,sys,threading,time,uuid
+import argparse,fcntl,hashlib,importlib.util,json,os,queue,re,shutil,subprocess,sys,threading,time,uuid
 from pathlib import Path
 DIST=Path(__file__).resolve().parents[1];sys.path[:0]=[str(DIST/'drako'),str(DIST/'drako_runner')]
 from workflow import atomic,post_evidence
-from common import config,private_json,need,payload_hash,ticket_context
+from common import config,private_json,need,payload_hash,ticket_context,fingerprint
 from agent_lane import load_binding,native_request,claim_ticket
 from tool_server import serve
 from trace_bridge import stage,deliver
@@ -28,6 +28,12 @@ def inputs(profile):
   need(p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(root.resolve()) and p.stat().st_size<=1048576,'Invalid admitted task source');out[name]=digest(p)
  need(all(name in out for name in profile['files'] if name!='README.md'),'Task inputs missing');return out
 
+def runtime_binding(cpath,c,engine):
+ native=c['claude'] if engine=='claude' else shutil.which('codex')
+ need(native is not None,'Native binary unavailable')
+ return {'config_sha256':digest(cpath),'executables':{name:fingerprint(path) for name,path in {'python':c['python'],'node':c['node'],'session':c['session'],'doctor':c['doctor'],'native':native}.items()}}
+
+
 def load(directory,check_source=True,check_ticket=True):
  d=Path(directory).resolve(strict=True);j=private_json(d/'job.json');need(j['profile'] in PROFILES and j['engine'] in ['claude','codex'],'Unknown admitted profile/engine');profile=PROFILES[j['profile']];root=Path(profile['root']).resolve();need(d.parent==root/'.drako/runs','Wrong project run path');need(j['root']==str(root) and j['runner_root']==str(DIST),'Wrong runner/project')
  need(j['runner_head']==git(DIST,'rev-parse','HEAD') and j['runner_files']=={p.name:digest(p) for p in Path(__file__).parent.glob('*.py')},'Runner changed')
@@ -35,7 +41,7 @@ def load(directory,check_source=True,check_ticket=True):
  if check_source:need(j['live_context']==fresh(root) and j['source_files']==inputs(profile),'STALE_CONTEXT: project changed; no stale execution')
  from lane import verify_context
  verify_context(private_json(d/'context-manifest.json'))
- c=config(j['config_path']);client=load_binding(c['binding'])
+ c=config(j['config_path']);need(j['runtime_binding']==runtime_binding(j['config_path'],c,j['engine']),'Runtime config/executable changed; retain job, no replay');client=load_binding(c['binding'])
  if check_ticket:need(ticket_context(client.get(j['ticket_id']))==private_json(d/'ticket.json'),'Ticket changed')
  return d,j,c,client
 
@@ -46,7 +52,7 @@ def prepare(cpath,ticket,profile,engine):
  live=fresh(root);need(live['project']==profile,'Mapped project mismatch');src=inputs(PROFILES[profile]);rid='run_'+uuid.uuid4().hex;d=root/'.drako/runs'/rid
  sys.path.insert(0,c['control_lib']);from drako_control.control_plane import RunJournal;from drako_control import tracing
  os.environ['DRAKO_TRACING']='off';journal=RunJournal(root);run={'run_id':rid,'project_id':profile,'pod_id':'fresh-native-project','runtime_id':engine+'-native-subscription','task_id':ticket,'correlation_id':'','status':'running','created_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),'agent_ids':[engine],'crew_id':'existing-project-check','room_ids':[],'slot_ids':[]};journal.create(run)
- j={'schema':'drako.fresh-native-project.v1','profile':profile,'root':str(root),'engine':engine,'run_id':rid,'ticket_id':ticket,'config_path':str(Path(cpath).resolve()),'runner_root':str(DIST),'runner_head':git(DIST,'rev-parse','HEAD'),'runner_files':{p.name:digest(p) for p in Path(__file__).parent.glob('*.py')},'loader_sha256':digest(LOADER),'freshness_sha256':digest(FRESH),'live_context':live,'source_files':src,'native_session_id':str(uuid.uuid4())}
+ j={'schema':'drako.fresh-native-project.v1','profile':profile,'root':str(root),'engine':engine,'run_id':rid,'ticket_id':ticket,'config_path':str(Path(cpath).resolve()),'runner_root':str(DIST),'runner_head':git(DIST,'rev-parse','HEAD'),'runner_files':{p.name:digest(p) for p in Path(__file__).parent.glob('*.py')},'loader_sha256':digest(LOADER),'freshness_sha256':digest(FRESH),'live_context':live,'source_files':src,'native_session_id':str(uuid.uuid4()),'runtime_binding':runtime_binding(cpath,c,engine)}
  from lane import manifest
  atomic(d/'source-context.json',{'live_context':live,'source_files':src,'runner_files':j['runner_files']})
  atomic(d/'ticket.json',ticket_context(t));ctx=manifest([d/'source-context.json',d/'ticket.json',LOADER,FRESH,*sorted(Path(__file__).parent.glob('*.py'))]);atomic(d/'context-manifest.json',ctx);j['context_sha256']=ctx['sha256']

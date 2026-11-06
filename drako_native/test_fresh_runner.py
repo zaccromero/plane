@@ -31,4 +31,10 @@ class Contracts(unittest.TestCase):
    for n in ['two','three']:(Path(t)/n).write_text(n)
    (Path(t)/'one').symlink_to(Path(t)/'two')
    with self.assertRaisesRegex(RuntimeError,'Invalid admitted'):m.inputs(p)
+ def test_runtime_config_and_executable_drift_changes_binding(self):
+  with tempfile.TemporaryDirectory() as t:
+   root=Path(t);config=root/'config';config.write_text('one');program=root/'program';program.write_text('program')
+   c={x:str(program) for x in ['python','node','session','doctor','claude']}
+   old=m.runtime_binding(config,c,'claude');config.write_text('two');self.assertNotEqual(old,m.runtime_binding(config,c,'claude'))
+   old=m.runtime_binding(config,c,'claude');program.write_text('changed program');self.assertNotEqual(old,m.runtime_binding(config,c,'claude'))
 if __name__=='__main__':unittest.main()
