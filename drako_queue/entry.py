@@ -14,7 +14,7 @@ def branch_name(name):
  b.need(isinstance(name,str) and name.startswith('feat/'),'Queue branch must be isolated feature branch')
  subprocess.run(['git','check-ref-format','--branch',name],check=True,capture_output=True);return name
 
-def init(config,tickets,branches,continue_from=None):
+def _init(config,tickets,branches,continue_from=None):
  b.need(len(tickets)==len(set(tickets))==len(branches)==2,'Exactly two distinct owner-admitted tickets required')
  branches=[branch_name(x) for x in branches];b.need(len(set(branches))==2,'Distinct ticket branches required')
  b.need(not b.git(b.ROOT,'status','--porcelain','--untracked-files=no'),'Clean admitted worktree required')
@@ -35,6 +35,14 @@ def init(config,tickets,branches,continue_from=None):
  b.atomic(q/'admission.json',admission);b.atomic(q/'state.json',{'phase':'ready','index':0,'jobs':[],'completed':[],'lane':parent['lane'] if parent else None,**({'native_session_id':parent['native_session_id'],'parent_completion':parent['completed'][-1]} if parent else {})})
  if parent_q:b.atomic(parent_q/'successor.json',{'queue_dir':str(q),'admission_sha256':b.common.digest(q/'admission.json')})
  print(json.dumps({'queue_dir':str(q),'tickets':tickets}))
+
+def init(config,tickets,branches,continue_from=None):
+ if continue_from:
+  parent,_,_,_=load_queue(continue_from)
+  with open(parent/'queue.lock','a') as lock:
+   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   return _init(config,tickets,branches,continue_from)
+ return _init(config,tickets,branches)
 
 def load_queue(directory):
  q=Path(directory).resolve(strict=True);b.need(q.parent==(b.ROOT/'.drako/queues').resolve(),'Wrong queue root')

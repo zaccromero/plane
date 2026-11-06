@@ -56,3 +56,16 @@ class QueueTests(unittest.TestCase):
   for tickets,branches in [([],[]),(['same','same'],['feat/a','feat/b']),(['a','b','c'],['feat/a','feat/b','feat/c'])]:
    with self.assertRaises(RuntimeError):q.init('/config',tickets,branches)
   with self.assertRaises(RuntimeError):q.branch_name('main')
+
+ def test_next_dispatch_requires_positive_writer_exit_and_active_claim(self):
+  import sys
+  sys.path.insert(0,'/Users/zaccromero/.drako/hermes/current/source')
+  from hermes_cli import agent_tasks
+  config={'hermes_source':'/Users/zaccromero/.drako/hermes/current/source','board_db':'/unused'}
+  with patch.object(agent_tasks,'ControllerSupervisor') as supervisor,patch.object(agent_tasks,'group_dead',return_value=True) as dead:
+   supervisor.return_value.__enter__.return_value.request.return_value={'result':{'task':self.claim}}
+   self.assertEqual(q.owner(config,'claim')['id'],'claim')
+   dead.return_value=False
+   with self.assertRaisesRegex(RuntimeError,'exited writer'):q.owner(config,'claim')
+   dead.return_value=True;self.claim['state']='owner_review'
+   with self.assertRaisesRegex(RuntimeError,'exited writer'):q.owner(config,'claim')
