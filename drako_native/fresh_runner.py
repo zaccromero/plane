@@ -68,13 +68,12 @@ class Worker:
     if (results/'check.json').exists():
      value=private_json(results/'check.json');need(value['native_actor']==actor['actor'],'Cached actor changed');return value
     need(not (results/'intent.json').exists(),'Unknown test outcome; no implicit replay')
-    # A dispatched bounded assignment uses its verified immutable snapshot, not
-    # a new network request for every fixed capability. No ticket text executes.
-    class BoundTicket:
-     project=client.project
-     def get(self,ticket):
-      need(ticket==j['ticket_id'],'Wrong bound ticket');return private_json(d/'ticket.json')
-    claim=claim_ticket(BoundTicket(),j['ticket_id'],str(root),[str(results.relative_to(root))],results/'ownership');atomic(results/'intent.json',{'status':'started','source_files':j['source_files']})
+    # Keep native ownership local to the existing managed controller. Plane
+    # delivery is independently reconciled after execution, not inside a claim.
+    claim_path=results/'ownership.json';need(not claim_path.exists(),'Existing native claim requires supported resumption')
+    task=native_request({'action':'claim','project':str(root),'scopes':[str(results.relative_to(root))],'task_key':'PLANE_'+j['ticket_id'].replace('-',''),'legacy_reconciled':True})
+    claim={'claim':task};atomic(claim_path,claim)
+    atomic(results/'intent.json',{'status':'started','source_files':j['source_files']})
     argv=[c['node'],*PROFILES[j['profile']]['args']];env={k:v for k,v in os.environ.items() if k in ['HOME','PATH','TMPDIR','LANG']};start=time.time()
     with (results/'test.log').open('w') as out:r=subprocess.run(argv,cwd=root,env=env,stdout=out,stderr=subprocess.STDOUT,timeout=60)
     output=(results/'test.log').read_text();n=re.findall(r'^# tests (\d+)\s*$',output,re.M);failed=re.findall(r'^# fail (\d+)\s*$',output,re.M);skips=re.findall(r'^# skipped (\d+)\s*$',output,re.M)
