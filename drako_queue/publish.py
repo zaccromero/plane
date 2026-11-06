@@ -7,7 +7,7 @@ def publication(d,j,c,state):
  need(review['p0']==0 and review['p1']==0 and review['full_component_gate'] is True and review['files']==common.files() and review['check_sha256']==payload_hash(check),'Reviewed exact output required')
  need(report['check_sha256']==payload_hash(check) and report['context_sha256']==j.get('execution_context_sha256',j['context_sha256']),'Worker binding mismatch')
  client=load_binding(c['binding']);need(ticket_context(client.get(j['ticket_id']))==private_json(d/'ticket-context.json'),'Ticket changed')
- sys.path.insert(0,c['hermes_source']);from hermes_cli.agent_tasks import ControllerSupervisor
+ sys.path.insert(0,c['hermes_source']);from hermes_cli.agent_tasks import ControllerSupervisor,group_dead
  with ControllerSupervisor(board='default',board_db=Path(c['board_db']),project_path=ROOT) as sup:
   t=sup.request({'action':'show','id':report['claim_id']})['result']['task']
   need(t['owner']==report['native_actor'] and t['owner']['client']=='claude' and common.exact_scopes(t['scopes'],j['queue_expected_scopes']),'Wrong queue owner/scope')

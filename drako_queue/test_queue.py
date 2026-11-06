@@ -69,3 +69,16 @@ class QueueTests(unittest.TestCase):
    with self.assertRaisesRegex(RuntimeError,'exited writer'):q.owner(config,'claim')
    dead.return_value=True;self.claim['state']='owner_review'
    with self.assertRaisesRegex(RuntimeError,'exited writer'):q.owner(config,'claim')
+
+ def test_publication_refuses_live_writer_before_git_or_network_mutation(self):
+  import sys
+  sys.path.insert(0,'/Users/zaccromero/.drako/hermes/current/source')
+  from hermes_cli import agent_tasks
+  import publish
+  w.active_result(w.QueueWorker(self.d),'result',{})
+  b.atomic(self.d/'ticket-context.json',{'same':True})
+  config={'binding':'/private-binding','hermes_source':'/Users/zaccromero/.drako/hermes/current/source','board_db':'/unused'}
+  with patch.object(publish,'ROOT',self.root),patch.object(publish,'load_binding') as binding,patch.object(publish,'ticket_context',return_value={'same':True}),patch.object(agent_tasks,'ControllerSupervisor') as supervisor,patch.object(agent_tasks,'group_dead',return_value=False):
+   supervisor.return_value.__enter__.return_value.request.return_value={'result':{'task':self.claim}}
+   with self.assertRaisesRegex(RuntimeError,'positively exited writer'):publish.publication(self.d,self.j,config,{'phase':'executed'})
+  self.assertFalse((self.d/'commit-intent.json').exists())
