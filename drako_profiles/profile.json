@@ -1,0 +1,22 @@
+{
+  "id": "drako-map-elevation-finite-v1",
+  "repo": "zaccromero/drako-map",
+  "project": "drako-map",
+  "files": [
+    "packages/elevation/src/profile.ts",
+    "packages/elevation/test/profile.test.ts"
+  ],
+  "context": [
+    "README.md",
+    "package.json",
+    "packages/elevation/README.md",
+    "packages/elevation/package.json",
+    "packages/elevation/src/lib.ts",
+    "packages/elevation/src/tools.ts",
+    "packages/elevation/src/providers/types.ts",
+    ".github/workflows/ci.yml"
+  ],
+  "task": "Repair summariseProfile so every non-finite elevation sample (NaN, Infinity, -Infinity), including a singleton or sparse array, throws RangeError with a useful nonempty message. Also reject non-finite arithmetic deltas or gain/loss totals caused by finite extreme inputs. Preserve empty and finite singleton zero, negative heights, finite ascent/descent results and no input mutation. Only edit packages/elevation/src/profile.ts and packages/elevation/test/profile.test.ts. Keep original test file text intact and append meaningful regression tests. No imports or I/O in the pure source module; use Number.isFinite and RangeError. No provider, runtime, dependency, secret, deployment or merge changes.",
+  "title": "Reject non-finite elevation profiles before reporting gain and loss",
+  "base": "main"
+}
