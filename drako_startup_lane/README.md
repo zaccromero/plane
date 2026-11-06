@@ -1,0 +1,6 @@
+# Startup-context Plane lane
+Reuse the existing installed Drako startup packet, project-bound Plane adapter, native claim controller, three-tool MCP service loop, RunJournal and fixed SSH tracing/eval receiver. No new service, datastore or general execution framework.
+
+`entry.py check` produces a confined source-verified startup preflight for Drako OS. `prepare --config PRIVATE_CONFIG --ticket UUID` creates a task/context manifest. `run RUN_DIR` launches a fresh native Claude with only ticket_read/approved_check/result. The model must acknowledge the automatically injected startup version before seeing any tool result. The approved operation writes a useful task-specific `context-handoff.json` under its actual native claim. Host checks, backend tracing/score and one Plane evidence comment gate publication.
+
+Only metadata/digests are posted to Plane; private pack bodies remain local. Snapshot hashes do not certify continuously live external facts. Missing/changed/foreign/truncated context holds. One native attempt per job; uncertain execution is not blindly replayed. Re-running a published job revalidates sources and reuses the existing run/trace/score/evidence, without native relaunch or ownership release. Active source/result reservations are retained; no owner_accept/merge/deploy permissions exist.
