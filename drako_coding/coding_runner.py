@@ -104,12 +104,12 @@ def publication(d,j,c,state):
  need(state['phase'] in {'executed','published'},'Unknown/live execution; no relaunch')
  check=checked(d,j);report=private_json(d/'results/report.json');review=private_json(d/'review.json')
  need(review['p0']==0 and review['p1']==0 and review['full_component_gate'] is True and review['files']==files() and review['check_sha256']==payload_hash(check),'Reviewed exact output required')
- need(report['check_sha256']==payload_hash(check) and report['context_sha256']==j['context_sha256'],'Worker binding mismatch')
+ need(report['check_sha256']==payload_hash(check) and report['context_sha256']==j.get('execution_context_sha256',j['context_sha256']),'Worker binding mismatch')
  client=load_binding(c['binding']);need(ticket_context(client.get(j['ticket_id']))==private_json(d/'ticket-context.json'),'Ticket changed')
  sys.path.insert(0,c['hermes_source']);from hermes_cli.agent_tasks import ControllerSupervisor
  with ControllerSupervisor(board='default',board_db=Path(c['board_db']),project_path=ROOT) as sup:
   t=sup.request({'action':'show','id':report['claim_id']})['result']['task']
-  need(t['owner']==report['native_actor'] and t['owner']['client']=='claude' and t['scopes']==FILES+[str((d/'results').relative_to(ROOT))],'Wrong coding claim')
+  need(t['owner']==report['native_actor'] and t['owner']['client']=='claude' and exact_scopes(t['scopes'],FILES+[str((d/'results').relative_to(ROOT))]),'Wrong coding claim')
   if t['state']=='finish_pending':t=sup.request({'action':'settle','id':t['id'],'revision':t['revision']})['result']['task']
   need(t['state']=='owner_review','Native writer not quiescent/delivered')
  def git(*args):return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
@@ -146,7 +146,7 @@ def publication(d,j,c,state):
  score=deliver({'kind':'score','trace_id':payload['trace_id'],'root_span_id':payload['root_span_id'],'passed':True},c['trace_host'],c['trace_identity'])
  need(trace['trace_observed'] and score['score_observed'] and score['value'] is True,'Backend proof missing')
  expected={'ticket_id':j['ticket_id'],'project_id':j['plane_project'],'run_id':j['run_id'],'claim_id':t['id']}
- evidence={**expected,'context_sha256':j['context_sha256'],'checks_passed':True,'trace_observed':True,'score_observed':True,'trace_id':payload['trace_id'],'score_id':score['score_id'],'source_head':j['source_head'],'delivery_head':state['delivery_head'],'pr':prs[0]['url'],'files':files(),'native_invocations':state['native_invocations'],'test_attempts':check['test_attempt'],'owner_acceptance':'pending'}
+ evidence={**expected,'context_sha256':j['context_sha256'],'checks_passed':True,'trace_observed':True,'score_observed':True,'trace_id':payload['trace_id'],'score_id':score['score_id'],'source_head':j['source_head'],'execution_source_head':j.get('execution_source_head',j['source_head']),'execution_context_sha256':j.get('execution_context_sha256',j['context_sha256']),'delivery_head':state['delivery_head'],'pr':prs[0]['url'],'files':files(),'native_invocations':state['native_invocations'],'test_attempts':check['test_attempt'],'owner_acceptance':'pending'}
  receipt=post_evidence(client,evidence,expected,private_json(d/'context-manifest.json'),d/'evidence')
  rows=client.request('GET','/states/');rows=rows if isinstance(rows,list) else rows['results']
  target=legacy.review_transition(state['phase'],client.get(j['ticket_id']),rows)

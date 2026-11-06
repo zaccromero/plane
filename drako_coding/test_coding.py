@@ -4,6 +4,11 @@ from unittest.mock import patch
 import coding_common as c
 from coding_tool_server import Worker,SCHEMAS
 class CodingTests(unittest.TestCase):
+ def test_exact_scopes_allow_order_only(self):
+  expected=c.FILES+['.drako/run/results']
+  self.assertTrue(c.exact_scopes(sorted(expected),expected))
+  self.assertFalse(c.exact_scopes(expected+['extra'],expected))
+  self.assertFalse(c.exact_scopes(expected+expected,expected))
  def test_public_immutable_contract(self):
   self.assertEqual(c.contract()['catalog'],c.CATALOG)
  def test_tool_scope(self):

@@ -12,6 +12,9 @@ CATALOG='two-file-run-status'
 def contract():
  return json.loads((ROOT/'drako_coding/contract.json').read_text())
 
+def exact_scopes(actual,expected):
+ return len(actual)==len(expected) and set(actual)==set(expected)
+
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def files():
  values={}
