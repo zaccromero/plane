@@ -17,7 +17,10 @@ def native_argv(job,c,d):
 def prepare(config_path,ticket_id):
  c=config(config_path);need(not os.environ.get('AGENT_TASK_SESSION_CONTEXT'),'No nested executor');legacy.doctor(c)
  client=load_binding(c['binding']);ticket=client.get(ticket_id)
- need(not files(),'Approved output files already exist; choose/reconcile this catalog before reuse')
+ initial=files();need(not initial or set(initial)==set(FILES),'Partial existing output requires reconciliation')
+ branch=subprocess.check_output(['git','branch','--show-current'],cwd=ROOT,text=True).strip()
+ need(branch.startswith('feat/'),'A private feature branch is required')
+ subprocess.run(['git','check-ref-format','--branch',branch],cwd=ROOT,check=True,capture_output=True)
  head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
  need(not subprocess.check_output(['git','status','--porcelain','--','drako','drako_runner','drako_coding','drako_status'],cwd=ROOT,text=True).strip(),'Commit runner inputs before prepare')
  sys.path.insert(0,c['control_lib']);from drako_control.control_plane import RunJournal
@@ -25,11 +28,12 @@ def prepare(config_path,ticket_id):
  os.environ['DRAKO_TRACING']='off';journal=RunJournal(ROOT);rid='run_'+uuid.uuid4().hex
  run=dict(run_id=rid,project_id='drako-os',pod_id='plane-coding',crew_id='scoped-coding',task_id=ticket_id,runtime_id='claude-scoped-coding',correlation_id='',status='running',approval_status='owner-approved-two-file-coding',created_at=__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),agent_ids=['claude'],room_ids=[],slot_ids=[],preflight={'provider':'claude.ai-subscription'})
  journal.create(run);d=journal.runs_dir/rid;atomic(d/'ticket-context.json',ticket_context(ticket))
- paths=[Path(config_path).resolve(),Path(c['binding']).resolve(),d/'ticket-context.json']
+ atomic(d/'baseline-files.json',{name:{'sha256':value,'content':(ROOT/name).read_text()} for name,value in initial.items()})
+ paths=[Path(config_path).resolve(),Path(c['binding']).resolve(),d/'ticket-context.json',d/'baseline-files.json']
  for folder in ['drako','drako_runner','drako_coding']:paths+=sorted((ROOT/folder).glob('*.py'))
  paths+=[python_engine(c['python']),ROOT/'drako_coding/contract.json',Path(c['control_lib'])/'drako_control/tracing.py',Path(c['control_lib'])/'drako_control/control_plane.py']
  context=manifest(paths)
- job=dict(schema='drako.scoped-coding.v1',run_id=rid,project_root=str(ROOT),source_head=head,config_path=str(Path(config_path).resolve()),ticket_id=ticket_id,plane_project=client.project,catalog=CATALOG,native_session_id=str(uuid.uuid4()),tools=sorted(TOOLS),context_sha256=context['sha256'],timeout_seconds=300,max_assistant_messages=16,max_tool_calls=16,executables={n:fingerprint(c[n]) for n in ['python','claude','session','workload','doctor']})
+ job=dict(schema='drako.scoped-coding.v1',run_id=rid,project_root=str(ROOT),source_head=head,config_path=str(Path(config_path).resolve()),ticket_id=ticket_id,plane_project=client.project,catalog=CATALOG,initial_files=initial,publication_branch=branch,native_session_id=str(uuid.uuid4()),tools=sorted(TOOLS),context_sha256=context['sha256'],timeout_seconds=300,max_assistant_messages=16,max_tool_calls=16,executables={n:fingerprint(c[n]) for n in ['python','claude','session','workload','doctor']})
  atomic(d/'job.json',job);atomic(d/'context-manifest.json',context);atomic(d/'state.json',{'phase':'prepared','native_invocations':0})
  atomic(d/'mcp.json',{'mcpServers':{'drako_code':{'type':'stdio','command':c['python'],'args':['-B',str(ROOT/'drako_coding/coding_tool_server.py'),str(d)],'env':{'AGENT_TASK_SESSION_CONTEXT':'${AGENT_TASK_SESSION_CONTEXT}','PYTHONDONTWRITEBYTECODE':'1'}}}})
  run['correlation_id']=context['sha256'];journal.save(run)
@@ -114,7 +118,7 @@ def publication(d,j,c,state):
   need(t['state']=='owner_review','Native writer not quiescent/delivered')
  def git(*args):return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
  need(git('remote','get-url','origin') in ['https://github.com/zaccromero/plane.git','git@github.com:zaccromero/plane.git'],'Unexpected publication repository')
- need(git('branch','--show-current')=='feat/plane-coding-runner','Unexpected publication branch')
+ need(git('branch','--show-current')==j['publication_branch'] and j['publication_branch'].startswith('feat/'),'Unexpected publication branch')
  if not state.get('delivery_head'):
   need(not (d/'commit-intent.json').exists(),'Uncertain commit; reconcile exact head before retry')
   changed=git('diff','--name-only').splitlines();untracked=git('ls-files','--others','--exclude-standard','--','drako_status').splitlines()
@@ -125,14 +129,14 @@ def publication(d,j,c,state):
   subprocess.run(['git','commit','-m','Drako coding delivery '+j['run_id']],cwd=ROOT,check=True)
   state['delivery_head']=git('rev-parse','HEAD');atomic(d/'state.json',state)
  need(set(git('diff','--name-only',j['source_head'],state['delivery_head']).splitlines())==set(FILES),'Delivery commit changed extra paths')
- subprocess.run(['git','push','-u','origin','HEAD:refs/heads/feat/plane-coding-runner'],cwd=ROOT,check=True,timeout=60)
- command=['gh','pr','list','--repo','zaccromero/plane','--head','feat/plane-coding-runner','--base','drako/stable','--state','all','--json','number,url,headRefOid,state']
+ subprocess.run(['git','push','-u','origin','HEAD:refs/heads/'+j['publication_branch']],cwd=ROOT,check=True,timeout=60)
+ command=['gh','pr','list','--repo','zaccromero/plane','--head',j['publication_branch'],'--base','drako/stable','--state','all','--json','number,url,headRefOid,state']
  prs=json.loads(subprocess.check_output(command,text=True))
  if not prs:
   need(not (d/'pr-intent.json').exists(),'PR submission uncertain; query before retry')
-  body=d/'pr-body.md';body.write_text('Adds the bounded five-capability coding runner and a real model-authored run-status inspector. Native Claude edited only two approved files in an isolated worktree; fixed independent and worker tests passed under network/user-data/write restrictions. Host review and source gates passed. Existing read-only runner is unchanged.\n\nTicket '+j['ticket_id']+'; run '+j['run_id']+'; runner head '+j['source_head']+'; delivery head '+state['delivery_head']+'. Merge/owner acceptance are separate.\n')
+  body=d/'pr-body.md';body.write_text('Extends the merged coding runner with pinned existing-file baselines and a per-ticket branch; native Claude repairs trailing-separator symlink-root inspection. Native Claude edited only two approved files in an isolated worktree; fixed independent and worker tests passed under network/user-data/write restrictions. Host review and source gates passed. Existing read-only runner is unchanged.\n\nTicket '+j['ticket_id']+'; run '+j['run_id']+'; runner head '+j['source_head']+'; delivery head '+state['delivery_head']+'. Merge/owner acceptance are separate.\n')
   atomic(d/'pr-intent.json',{'head':state['delivery_head'],'status':'submission_started'})
-  subprocess.run(['gh','pr','create','--repo','zaccromero/plane','--head','feat/plane-coding-runner','--base','drako/stable','--title','Add scoped coding lanes and evidence-aware run status','--body-file',str(body)],check=True,text=True,timeout=60)
+  subprocess.run(['gh','pr','create','--repo','zaccromero/plane','--head',j['publication_branch'],'--base','drako/stable','--title','Make coding lanes repeatable and reject symlink-root status paths','--body-file',str(body)],check=True,text=True,timeout=60)
   prs=json.loads(subprocess.check_output(command,text=True))
  need(len(prs)==1 and prs[0]['headRefOid']==state['delivery_head'] and prs[0]['state']=='OPEN','PR head/state mismatch')
  atomic(d/'pr-receipt.json',prs[0])

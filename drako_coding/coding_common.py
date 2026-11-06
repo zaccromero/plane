@@ -12,6 +12,10 @@ CATALOG='two-file-run-status'
 def contract():
  return json.loads((ROOT/'drako_coding/contract.json').read_text())
 
+def initial_outputs(job,current):
+ need(current==job['initial_files'],'Existing output changed since preparation')
+ return dict(current)
+
 def exact_scopes(actual,expected):
  return len(actual)==len(expected) and set(actual)==set(expected)
 
@@ -30,6 +34,8 @@ def load_job(directory):
  c=config(j['config_path'])
  for key,value in j['executables'].items():need(fingerprint(c[key])==value,'Runtime changed: '+key)
  verify_context(private_json(d/'context-manifest.json'))
+ if j.get('publication_branch'):
+  need(subprocess.check_output(['git','branch','--show-current'],cwd=ROOT,text=True).strip()==j['publication_branch'],'Branch binding changed')
  state=private_json(d/'state.json')
  head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
  if head!=state.get('delivery_head',j['source_head']):

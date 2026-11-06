@@ -37,6 +37,11 @@ class StatusContract(unittest.TestCase):
  def test_symlink(self):
   target=Path(self.temp.name)/'outside';target.write_text('{}');(self.d/'state.json').symlink_to(target)
   self.assertEqual(self.m.inspect_run(self.d)['status'],'INVALID_EVIDENCE')
+ def test_symlink_root_with_trailing_separators(self):
+  target=Path(self.temp.name)/'real';target.mkdir();(target/'state.json').write_text(json.dumps({'phase':'prepared','native_invocations':0}))
+  link=Path(self.temp.name)/'linked';link.symlink_to(target,target_is_directory=True)
+  for suffix in ['/', '//']:
+   self.assertEqual(self.m.inspect_run(str(link)+suffix)['status'],'INVALID_EVIDENCE')
  def test_negative_invocations(self):
   self.put('state.json',{'phase':'executed','native_invocations':-1});self.assertEqual(self.m.inspect_run(self.d)['status'],'INVALID_EVIDENCE')
  def test_unknown_phase(self):

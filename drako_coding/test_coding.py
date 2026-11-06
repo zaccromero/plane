@@ -11,6 +11,10 @@ class CodingTests(unittest.TestCase):
   self.assertFalse(c.exact_scopes(expected+expected,expected))
  def test_public_immutable_contract(self):
   self.assertEqual(c.contract()['catalog'],c.CATALOG)
+ def test_existing_output_preimage_guard(self):
+  expected={c.FILES[0]:'first',c.FILES[1]:'second'}
+  self.assertEqual(c.initial_outputs({'initial_files':expected},dict(expected)),expected)
+  with self.assertRaises(RuntimeError):c.initial_outputs({'initial_files':expected},{c.FILES[0]:'changed',c.FILES[1]:'second'})
  def test_tool_scope(self):
   self.assertEqual(len(SCHEMAS),5)
   for path in ['../outside','/tmp/foo','drako_coding/runner.py']:
