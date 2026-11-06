@@ -9,6 +9,9 @@ TOOLS={'mcp__drako_code__'+name for name in ['ticket_read','read_context','write
 FILES=['drako_status/status.py','drako_status/test_status.py']
 CATALOG='two-file-run-status'
 
+def contract():
+ return json.loads((ROOT/'drako_coding/contract.json').read_text())
+
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def files():
  values={}

@@ -4,6 +4,8 @@ from unittest.mock import patch
 import coding_common as c
 from coding_tool_server import Worker,SCHEMAS
 class CodingTests(unittest.TestCase):
+ def test_public_immutable_contract(self):
+  self.assertEqual(c.contract()['catalog'],c.CATALOG)
  def test_tool_scope(self):
   self.assertEqual(len(SCHEMAS),5)
   for path in ['../outside','/tmp/foo','drako_coding/runner.py']:
