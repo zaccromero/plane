@@ -1,0 +1,6 @@
+# Resilient admitted ticket queue
+Additive supervisor over Plane's merged active-lane worker, independent verifier and publication path. One or two owner-admitted tickets only. Five tools, six writes/three tests/three host attempts, maximum three native processes per ticket. No claim release, owner-accept, permissions change or automatic merges.
+
+Interrupted safe partial work resumes the exact active logical owner through agent-resume-task after positive process exit and unchanged hashes/check/context. Complete independent verified receipts are finalized without executing the model again. Each attempt retains its own output, process identity and actual wait status; unavailable wait status is null, never fabricated success. Cumulative same-job tool usage permits safe continuations without repeated writes. Unknown intents, foreign/live owners, source drift or permission denials hold.
+
+Use entry.py --project ROOT init --config CONFIG --ticket ID --branch feat/NAME --continue-from PARENT. run/resume QUEUE_DIR uses locking and persisted budgets. `--interrupt-qualification` admits two deliberate real SIGTERM points after completed tests and after durable verification. Faults target only this process's birth-verified registered descendant group and never active unrelated agents. Normal admissions contain no faults.
