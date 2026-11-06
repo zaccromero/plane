@@ -87,7 +87,7 @@ def prepare_one(q,admission,state,c):
   j.update(resume_claim=lane['id'],resume_revision=lane['revision'],queue_previous_owner=lane['owner'],queue_previous_scopes=lane['scopes'],native_session_id=state['native_session_id'])
  j['resilience']='bounded-native-recovery-v1'
  j['fault_plan']=admission.get('fault_plan',[])
- paths=[Path(x['path']) for x in b.private_json(d/'context-manifest.json')['files']]+[q/'admission.json']+sorted((DIST/'drako_queue').glob('*.py'))+sorted((DIST/'drako_resilient_queue').glob('*.py'))
+ paths=[Path(x['path']) for x in b.private_json(d/'context-manifest.json')['files']]+[q/'admission.json']+sorted((DIST/'drako_queue').glob('*.py'))+sorted((DIST/'drako_resilient_queue').glob('*.py'))+[DIST/'drako_resilient_queue/contract.test.mjs']
  ctx=b.manifest(paths);j['context_sha256']=ctx['sha256'];b.atomic(d/'job.json',j);b.atomic(d/'context-manifest.json',ctx)
  b.atomic(d/'mcp.json',{'mcpServers':{'drako_code':{'type':'stdio','command':c['python'],'args':['-B',str(DIST/'drako_resilient_queue/entry.py'),'--project',str(b.ROOT),'server',str(d)],'env':{'AGENT_TASK_SESSION_CONTEXT':'${AGENT_TASK_SESSION_CONTEXT}','PYTHONDONTWRITEBYTECODE':'1'}}}})
  sys.path.insert(0,c['control_lib']);from drako_control.control_plane import RunJournal
@@ -116,6 +116,23 @@ def run(directory):
    b.atomic(q/('ticket-'+str(index)+'-completion.json'),receipt);state['completed'].append(receipt);state['lane']={k:lane[k] for k in ['id','owner','revision','scopes']};state['index']+=1;state['phase']='advancing' if state['index']<len(admission['tickets']) else 'idle_active';b.atomic(q/'state.json',state)
   lane=owner(c,state['lane']['id']);b.need(lane['owner']==state['lane']['owner'] and lane['revision']==state['lane']['revision'],'Idle active lane changed')
   print(json.dumps({'phase':state['phase'],'completed':state['completed'],'lane_id':lane['id'],'lane_state':'active','owner_accept_calls':0}))
+
+# Extend the existing independent full gate with the bounded ticket's immutable contract.
+import recovery as recovery_module
+_original_verify=recovery_module.map_verify
+def verify_ticket(d,j,c,root):
+ value=_original_verify(d,j,c,root)
+ import shutil
+ from verifier import host_profile
+ scratch=d/'verification-scratch';snapshot=d/'verification-snapshot'
+ shutil.copyfile(DIST/'drako_resilient_queue/contract.test.mjs',scratch/'read-once.test.mjs')
+ log=d/'verification-logs/read-once.log';env={'PATH':str(Path(c['node']).parent)+':/usr/bin:/bin','HOME':str(scratch),'TMPDIR':str(scratch),'DRAKO_TARGET_SOURCE':str(scratch/'profile.ts')}
+ with log.open('w') as out:r=subprocess.run([c['workload'],'run','/usr/bin/env','-i',*[k+'='+v for k,v in env.items()],'/usr/bin/sandbox-exec','-p',host_profile(snapshot,scratch,c['node']),c['node'],'--experimental-strip-types','--experimental-test-isolation=none','--test',str(scratch/'read-once.test.mjs')],cwd=scratch,stdout=out,stderr=subprocess.STDOUT,timeout=45)
+ ok=b.tap_pass(log.read_text(),r.returncode)
+ gate={'gate':'read-once','status':'PASS' if ok else 'FAIL','exit_code':r.returncode,'log':str(log),'sha256':b.common.digest(log)}
+ b.need(ok,'Automatic verification failed: read-once contract')
+ value['gates'].append(gate);b.atomic(d/'review.json',value);return value
+recovery_module.map_verify=verify_ticket
 
 class InterruptibleWorker(QueueWorker):
  def call(self,name,args):
