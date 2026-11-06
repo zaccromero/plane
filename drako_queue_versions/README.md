@@ -1,0 +1,6 @@
+# Versioned queue continuation
+Continue a completed, quiescent resilient lane across runner SHAs without changing its historical jobs, admissions, counters or claim. Compatibility v1 verifies protected source trees, retained clean runtime/checkouts, immutable context/output/review/log proof, unchanged config/scope and exact active owner/revision. A new successor pins the new runtime. Existing historical jobs dispatch only through their original verified runtime.
+
+`entry.py --project ROOT init --config CONFIG --ticket ID --branch feat/NAME --continue-from PARENT [--interrupt-qualification]`
+
+Admission uses the parent lock and a deterministic persisted transition intent. Retrying the same request reuses the child; known incomplete metadata creation is completed automatically. A changed request, uncertain execution, incompatible core/protocol, missing receipt or live/foreign/terminal owner holds. No owner acceptance, release, permissions changes or merges are available. Interrupt qualification inherits the real native SIGTERM checkpoints after tests and durable verification from the merged resilient runner. New jobs retain all original budgets (6 writes,3 tests,3 host verifications,3 native attempts).
