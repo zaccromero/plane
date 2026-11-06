@@ -61,3 +61,11 @@ class RecoveryTests(unittest.TestCase):
   with patch.object(r,'map_verify',side_effect=bad):
    with self.assertRaisesRegex(RuntimeError,'binding mismatch'):r.RecoveryWorker(self.d).call('result',{})
   self.assertEqual(self.seals,0)
+
+ def test_qualification_receipt_obeys_existing_no_owner_acceptance_contract(self):
+  from workflow import validate_evidence
+  p=self.root/'context';p.write_text('trusted');context=b.manifest([p]);expected={'ticket_id':'ticket','project_id':'project','run_id':'run','claim_id':'claim'}
+  value=entry.qualification_evidence(expected,{'context_sha256':context['sha256']},{'native_invocations':1},{'trace_id':'trace'},{'score_id':'score'},self.hashes,2)
+  validate_evidence(value,expected,context)
+  value['owner_acceptance']='not claimed'
+  with self.assertRaisesRegex(ValueError,'Machine checks'):validate_evidence(value,expected,context)

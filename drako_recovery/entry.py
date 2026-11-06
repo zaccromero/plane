@@ -46,11 +46,14 @@ def prepare(cpath,ticket,qualification):
  tracing.bind_run(d,run,runs_dir=journal.runs_dir,env={'DRAKO_TRACING':'on','DRAKO_TRACE_ENDPOINT':'http://127.0.0.1:1/v1/traces'})
  print(json.dumps(value))
 
+def qualification_evidence(expected,j,state,payload,score,files,attempts):
+ return {**expected,'context_sha256':j['context_sha256'],'execution_context_sha256':j.get('execution_context_sha256',j['context_sha256']),'checks_passed':True,'trace_observed':True,'score_observed':True,'trace_id':payload['trace_id'],'score_id':score['score_id'],'qualification':True,'files':files,'native_invocations':state['native_invocations'],'host_attempts':attempts,'owner_accept_calls':0,'owner_acceptance':'pending'}
+
 def qualify_publication(d,j,c,state):
  base.need(state['phase'] in ['executed','published'],'Uncertain/live execution; no relaunch')
  check=base.common.checked(d,j);review=base.private_json(d/'review.json');report=base.private_json(d/'results/report.json')
- base.need(review['files']==base.common.files() and review['check_sha256']==base.payload_hash(check) and review['context_sha256']==j['context_sha256'],'Qualification verification binding mismatch')
- base.need(report['check_sha256']==base.payload_hash(check) and report['context_sha256']==j['context_sha256'],'Worker report mismatch')
+ base.need(review['files']==base.common.files() and review['check_sha256']==base.payload_hash(check) and review['context_sha256']==j.get('execution_context_sha256',j['context_sha256']),'Qualification verification binding mismatch')
+ base.need(report['check_sha256']==base.payload_hash(check) and report['context_sha256']==j.get('execution_context_sha256',j['context_sha256']),'Worker report mismatch')
  sys.path.insert(0,c['hermes_source']);from hermes_cli.agent_tasks import ControllerSupervisor
  with ControllerSupervisor(board='default',board_db=Path(c['board_db']),project_path=base.ROOT) as sup:
   claim=sup.request({'action':'show','id':report['claim_id']})['result']['task']
@@ -64,7 +67,7 @@ def qualify_publication(d,j,c,state):
  payload=base.stage(d);trace=base.deliver(payload,c['trace_host'],c['trace_identity']);score=base.deliver({'kind':'score','trace_id':payload['trace_id'],'root_span_id':payload['root_span_id'],'passed':True},c['trace_host'],c['trace_identity'])
  base.need(trace['trace_observed'] and score['score_observed'] and score['value'] is True,'Backend proof missing')
  expected={'ticket_id':j['ticket_id'],'project_id':j['plane_project'],'run_id':j['run_id'],'claim_id':claim['id']}
- evidence={**expected,'context_sha256':j['context_sha256'],'checks_passed':True,'trace_observed':True,'score_observed':True,'trace_id':payload['trace_id'],'score_id':score['score_id'],'qualification':True,'files':base.common.files(),'native_invocations':state['native_invocations'],'host_attempts':len(base.private_json(d/'preseal-history.json')),'owner_accept_calls':0,'owner_acceptance':'not claimed'}
+ evidence=qualification_evidence(expected,j,state,payload,score,base.common.files(),len(base.private_json(d/'preseal-history.json')))
  receipt=base.post_evidence(client,evidence,expected,base.private_json(d/'context-manifest.json'),d/'evidence')
  for name,v in [('trace-receipt.json',trace),('score-receipt.json',score),('evaluation.json',evidence)]:base.atomic(d/name,v)
  state.update(phase='published',trace_id=payload['trace_id'],score_id=score['score_id'],comment_id=receipt['comment_id']);base.atomic(d/'state.json',state);print(json.dumps(state))
