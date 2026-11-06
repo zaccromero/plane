@@ -9,7 +9,10 @@ from trace_bridge import stage,deliver
 import runner as legacy
 
 def native_argv(job,c,d):
- return [c['session'],'claude','--print','--output-format','stream-json','--verbose','--mcp-config',str(d/'mcp.json'),'--strict-mcp-config','--tools','','--allowedTools',','.join(sorted(TOOLS)),'--permission-mode','manual','--permission-prompts','none','--session-id',job['native_session_id'],'--no-chrome','--disable-slash-commands']
+ prefix=[str(Path(c['session']).with_name('agent-resume-task')),job['resume_claim'],str(job['resume_revision']),'claude','--resume',job['native_session_id']] if job.get('resume_claim') else [c['session'],'claude']
+ argv=prefix+['--print','--output-format','stream-json','--verbose','--mcp-config',str(d/'mcp.json'),'--strict-mcp-config','--tools','','--allowedTools',','.join(sorted(TOOLS)),'--permission-mode','manual','--permission-prompts','none','--no-chrome','--disable-slash-commands']
+ if not job.get('resume_claim'):argv+=['--session-id',job['native_session_id']]
+ return argv
 
 def prepare(config_path,ticket_id):
  c=config(config_path);need(not os.environ.get('AGENT_TASK_SESSION_CONTEXT'),'No nested executor');legacy.doctor(c)

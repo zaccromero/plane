@@ -29,6 +29,9 @@ class Worker:
    need(state_path.exists(),'Read and claim ticket first');state=private_json(state_path)
    t=native_request({'action':'show','id':state['claim_id']})
    actor=json.loads(subprocess.check_output([c['session'],'context'],text=True))
+   if t['owner']!=state['actor']:
+    need(j.get('resume_claim')==t['id'] and t['owner']==actor['actor'] and all(t['owner'][k]==state['actor'][k] for k in ['client','profile','session']),'No authenticated same-owner resumption')
+    state['actor']=t['owner'];atomic(state_path,state)
    need(t['owner']==state['actor']==actor['actor'] and actor['project']==str(ROOT),'Native actor changed')
    if (results/'report.json').exists():
     need((results/'finish.json').exists() and t['state']=='finish_pending','Unsealed result; reconcile')

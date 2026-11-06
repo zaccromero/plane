@@ -44,6 +44,11 @@ print(json.dumps(out))"""
    with patch.object(runner,'load_job',return_value=(d,{},{})),patch.object(runner,'execute') as execute:
     with self.assertRaises(RuntimeError):runner.run(d)
     execute.assert_not_called()
+ def test_resume_uses_supported_same_task_route(self):
+  import coding_runner as runner
+  argv=runner.native_argv({'native_session_id':'native','resume_claim':'claim','resume_revision':4},{'session':'/safe/agent-session'},Path('/run'))
+  self.assertEqual(argv[:6],['/safe/agent-resume-task','claim','4','claude','--resume','native'])
+  self.assertNotIn('--session-id',argv)
  def test_wrong_result_identity(self):
   with tempfile.TemporaryDirectory() as temp:
    d=Path(temp);(d/'results').mkdir();c.atomic(d/'results/check.json',{'run_id':'other','ticket_id':'ticket','passed':True})
