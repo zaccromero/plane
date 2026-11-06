@@ -2,8 +2,9 @@
 
 inspect_run(directory) returns a dict with exactly the keys in RESULT_KEYS.
 It reads only the expected run JSON files, refuses symlinks inside the run
-(and a symlinked run root) without following them, never echoes arbitrary
-fields or raw parse errors, and never infers process liveness.
+(and a symlinked run root, including one supplied with trailing path
+separators such as "link/" or "link//") without following them, never echoes
+arbitrary fields or raw parse errors, and never infers process liveness.
 
 No network, subprocesses or mutations.
 """
@@ -47,6 +48,21 @@ def _run_id(directory):
     return name
 
 
+def _strip_trailing_separators(path):
+    """Remove trailing separators so lstat sees the final component itself.
+
+    lstat("link/") or lstat("link//") resolves the symlink because the
+    trailing separator forces directory traversal; stripping them lets the
+    root check observe the link. A path consisting only of separators is
+    returned unchanged (it is the filesystem root, never a symlink).
+    """
+    seps = os.sep + (os.altsep or "")
+    if isinstance(path, bytes):
+        seps = os.fsencode(seps)
+    stripped = path.rstrip(seps)
+    return stripped if stripped else path
+
+
 def _read_json(root, parts):
     """Read root/parts as a JSON object without following any symlink.
 
@@ -56,6 +72,8 @@ def _read_json(root, parts):
     """
     current = root
     for index, part in enumerate(parts):
+        if isinstance(current, bytes):
+            part = os.fsencode(part)
         current = os.path.join(current, part)
         try:
             info = os.lstat(current)
@@ -128,7 +146,9 @@ def _invalid(run_id):
 
 def inspect_run(directory):
     run_id = _run_id(directory)
-    root = os.fspath(directory)
+    # Strip trailing separators before lstat: "link/" and "link//" would
+    # otherwise resolve the symlink and hide it from the root check.
+    root = _strip_trailing_separators(os.fspath(directory))
     try:
         root_info = os.lstat(root)
     except FileNotFoundError:

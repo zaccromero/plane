@@ -243,6 +243,85 @@ class InvalidTests(Base):
         self.assertEqual(self.run_status()["status"], "INVALID_EVIDENCE")
 
 
+class SymlinkRootTrailingSeparatorTests(Base):
+    """Regression: "link/" and "link//" must not follow a symlinked root."""
+
+    SUFFIXES = ("/", "//", "///")
+
+    def make_link(self):
+        link = self.base / "linked_run"
+        link.symlink_to(self.d, target_is_directory=True)
+        return link
+
+    def assertInvalidForSuffixes(self, link):
+        for suffix in self.SUFFIXES:
+            r = status.inspect_run(str(link) + suffix)
+            self.assertEqual(set(r), KEYS)
+            self.assertEqual(r["status"], "INVALID_EVIDENCE", suffix)
+            self.assertEqual(r["phase"], "invalid", suffix)
+            self.assertFalse(any(r[k] for k in ("checks_passed",
+                                                "trace_observed",
+                                                "score_observed",
+                                                "evidence_confirmed")))
+            self.assertIsNone(r["native_invocations"])
+
+    def test_published_target_never_pass(self):
+        self.valid()
+        link = self.make_link()
+        self.assertInvalidForSuffixes(link)
+        self.assertNotIn("PRIVATE",
+                         json.dumps(status.inspect_run(str(link) + "/")))
+
+    def test_prepared_target_not_not_run(self):
+        self.put("state.json", {"phase": "prepared", "native_invocations": 0})
+        self.assertInvalidForSuffixes(self.make_link())
+
+    def test_empty_target_not_not_run(self):
+        # Target lacks state.json; without the fix this reads as NOT_RUN.
+        self.assertInvalidForSuffixes(self.make_link())
+
+    def test_pathlike_link_with_trailing_separator(self):
+        self.valid()
+        link = self.make_link()
+        # Path objects drop trailing separators; still a symlink root.
+        self.assertEqual(status.inspect_run(Path(str(link) + "/"))["status"],
+                         "INVALID_EVIDENCE")
+
+    def test_dangling_link_with_trailing_separator(self):
+        link = self.base / "dangling"
+        link.symlink_to(self.base / "does-not-exist", target_is_directory=True)
+        for suffix in self.SUFFIXES:
+            self.assertEqual(status.inspect_run(str(link) + suffix)["status"],
+                             "INVALID_EVIDENCE", suffix)
+
+    def test_cli_rejects_trailing_separator_link(self):
+        self.valid()
+        link = self.make_link()
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = status.main([str(link) + "//"])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(out.getvalue())["status"],
+                         "INVALID_EVIDENCE")
+
+    def test_real_directory_with_trailing_separators_still_works(self):
+        self.valid()
+        for suffix in self.SUFFIXES:
+            r = status.inspect_run(str(self.d) + suffix)
+            self.assertEqual(r["status"], "PASS", suffix)
+            self.assertEqual(r["run_id"], "DRAKO-run", suffix)
+
+    def test_missing_directory_with_trailing_separator(self):
+        r = status.inspect_run(str(self.base / "nope") + "//")
+        self.assertEqual((r["status"], r["run_id"]), ("NOT_RUN", "nope"))
+
+    def test_symlinked_parent_of_real_run_unaffected_scope(self):
+        # Only the root itself is checked; a non-symlink real run still passes.
+        self.valid()
+        self.assertEqual(status.inspect_run(str(self.d) + "/")["status"],
+                         "PASS")
+
+
 class CliTests(Base):
     def cli(self, *args):
         out, err = io.StringIO(), io.StringIO()

@@ -1,7 +1,7 @@
 """Five scoped capabilities; generated code never executes in the server."""
 import fcntl,json,os,re,resource,subprocess,sys
 from pathlib import Path
-from coding_common import ROOT,FILES,TOOLS,atomic,need,private_json,load_job,ticket_context,files,digest,checked,contract,test_commands,test_env,payload_hash
+from coding_common import ROOT,FILES,TOOLS,atomic,need,private_json,load_job,ticket_context,files,digest,checked,contract,initial_outputs,test_commands,test_env,payload_hash
 from agent_lane import load_binding,claim_ticket,native_request
 
 SCHEMAS={name:{'type':'object','properties':{},'additionalProperties':False} for name in ['ticket_read','read_context','run_tests','result']}
@@ -22,9 +22,10 @@ class Worker:
    state_path=results/'worker-state.json'
    if name=='ticket_read' and not state_path.exists():
     need(not (results/'ownership/claim.json').exists(),'Uncertain claim; reconcile instead of retry')
+    initial=initial_outputs(j,files())
     scopes=FILES+[str(results.relative_to(ROOT))]
     claim=claim_ticket(client,j['ticket_id'],str(ROOT),scopes,results/'ownership')['claim']
-    state={'claim_id':claim['id'],'actor':claim['owner'],'files':{},'writes':0,'tests':0,'read':False}
+    state={'claim_id':claim['id'],'actor':claim['owner'],'files':initial,'writes':0,'tests':0,'read':False}
     atomic(state_path,state)
    need(state_path.exists(),'Read and claim ticket first');state=private_json(state_path)
    t=native_request({'action':'show','id':state['claim_id']})
@@ -41,7 +42,7 @@ class Worker:
    if name=='ticket_read':return ticket_context(client.get(j['ticket_id']))
    if name=='read_context':
     state['read']=True;atomic(state_path,state)
-    return {'contract':contract(),'allowed_files':FILES,'independent_test_source':(ROOT/'drako_coding/test_status_contract.py').read_text(),'bounds':{'writes':6,'test_attempts':3}}
+    return {'contract':contract(),'allowed_files':FILES,'baseline_files':private_json(d/'baseline-files.json'),'independent_test_source':(ROOT/'drako_coding/test_status_contract.py').read_text(),'bounds':{'writes':6,'test_attempts':3}}
    need(state['read'],'Read immutable coding contract before writing/testing')
    if name=='write_file':
     need(state['writes']<6,'Write budget exhausted')
