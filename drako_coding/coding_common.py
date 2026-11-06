@@ -26,6 +26,13 @@ def load_job(directory):
  verify_context(private_json(d/'context-manifest.json'))
  state=private_json(d/'state.json')
  head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+ if head!=state.get('delivery_head',j['source_head']):
+  intent=private_json(d/'commit-intent.json')
+  need(not state.get('delivery_head') and intent['parent']==j['source_head'] and intent['files']==files(),'Unrecognized commit outcome')
+  def git(*args):return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
+  need(git('rev-parse','HEAD^')==j['source_head'] and git('log','-1','--format=%s')==intent['message'],'Wrong commit identity')
+  need(set(git('diff','--name-only',j['source_head'],head).splitlines())==set(FILES),'Commit exceeds scope')
+  state['delivery_head']=head;state['commit_reconciled']=True;atomic(d/'state.json',state)
  need(head==state.get('delivery_head',j['source_head']),'Unexpected source revision')
  return d,j,c
 

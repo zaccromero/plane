@@ -29,4 +29,21 @@ out['scratch_write']=pathlib.Path('allowed').read_text()
 print(json.dumps(out))"""
   py='/opt/homebrew/bin/python3';p=subprocess.run(['/usr/bin/sandbox-exec','-p',c.profile(py,scratch),str(c.python_engine(py)),'-I','-B','-c',script],cwd=scratch,env={'PATH':'/usr/bin:/bin','HOME':str(scratch),'TMPDIR':str(scratch)},capture_output=True,text=True,timeout=10)
   self.assertEqual(p.returncode,0,p.stderr);self.assertEqual(json.loads(p.stdout),{'read':'DENIED','write':'DENIED','network':'DENIED','scratch_write':'ok'})
+ def test_exact_native_permission_scope(self):
+  import coding_runner as runner
+  argv=runner.native_argv({'native_session_id':'test'},{'session':'/session'},Path('/run'))
+  self.assertEqual(argv[argv.index('--tools')+1],'')
+  self.assertEqual(set(argv[argv.index('--allowedTools')+1].split(',')),c.TOOLS)
+  self.assertNotIn('--dangerously-skip-permissions',argv)
+ def test_uncertain_execution_is_not_relaunched(self):
+  import coding_runner as runner
+  with tempfile.TemporaryDirectory() as temp:
+   d=Path(temp);c.atomic(d/'state.json',{'phase':'launch_started','native_invocations':1})
+   with patch.object(runner,'load_job',return_value=(d,{},{})),patch.object(runner,'execute') as execute:
+    with self.assertRaises(RuntimeError):runner.run(d)
+    execute.assert_not_called()
+ def test_wrong_result_identity(self):
+  with tempfile.TemporaryDirectory() as temp:
+   d=Path(temp);(d/'results').mkdir();c.atomic(d/'results/check.json',{'run_id':'other','ticket_id':'ticket','passed':True})
+   with self.assertRaises(RuntimeError):c.checked(d,{'run_id':'expected','ticket_id':'ticket'})
 if __name__=='__main__':unittest.main()

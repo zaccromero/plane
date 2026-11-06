@@ -1,5 +1,5 @@
 """Five scoped capabilities; generated code never executes in the server."""
-import fcntl,json,os,re,subprocess,sys
+import fcntl,json,os,re,resource,subprocess,sys
 from pathlib import Path
 from coding_common import ROOT,FILES,TOOLS,atomic,need,private_json,load_job,ticket_context,files,digest,checked,test_commands,test_env,payload_hash
 from agent_lane import load_binding,claim_ticket,native_request
@@ -59,9 +59,13 @@ class Worker:
     intent=results/'test-intent.json';need(not intent.exists(),'Test outcome uncertain; reconcile')
     state['tests']+=1;atomic(state_path,state);atomic(intent,{'attempt':state['tests'],'files':files()})
     outputs=[];passed=True
-    for argv in test_commands(c,d):
-     r=subprocess.run(argv,cwd=d/'test-scratch',env=test_env(d),capture_output=True,text=True,timeout=45)
-     output=(r.stdout+r.stderr)[-24000:];outputs.append({'exit_code':r.returncode,'output':output})
+    for index,argv in enumerate(test_commands(c,d)):
+     def limits():
+      resource.setrlimit(resource.RLIMIT_CPU,(20,20));resource.setrlimit(resource.RLIMIT_FSIZE,(1048576,1048576))
+     log=d/'test-scratch'/('output-'+str(state['tests'])+'-'+str(index)+'.log')
+     with open(log,'w') as out:
+      r=subprocess.run(argv,cwd=d/'test-scratch',env=test_env(d),stdout=out,stderr=subprocess.STDOUT,text=True,timeout=45,preexec_fn=limits)
+     output=log.read_text()[-24000:];outputs.append({'exit_code':r.returncode,'output':output})
      match=re.search(r'Ran (\d+) tests?',output)
      passed=passed and r.returncode==0 and match is not None and int(match[1])>=1 and '\nOK\n' in output and 'skipped' not in output.lower()
     need(files()==state['files'],'Tests mutated source')

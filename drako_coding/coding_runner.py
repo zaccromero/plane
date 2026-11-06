@@ -100,7 +100,7 @@ def execute(d, job, c, state):
 def publication(d,j,c,state):
  need(state['phase'] in {'executed','published'},'Unknown/live execution; no relaunch')
  check=checked(d,j);report=private_json(d/'results/report.json');review=private_json(d/'review.json')
- need(review['p0']==0 and review['p1']==0 and review['files']==files() and review['check_sha256']==payload_hash(check),'Reviewed exact output required')
+ need(review['p0']==0 and review['p1']==0 and review['full_component_gate'] is True and review['files']==files() and review['check_sha256']==payload_hash(check),'Reviewed exact output required')
  need(report['check_sha256']==payload_hash(check) and report['context_sha256']==j['context_sha256'],'Worker binding mismatch')
  client=load_binding(c['binding']);need(ticket_context(client.get(j['ticket_id']))==private_json(d/'ticket-context.json'),'Ticket changed')
  sys.path.insert(0,c['hermes_source']);from hermes_cli.agent_tasks import ControllerSupervisor
@@ -138,6 +138,7 @@ def publication(d,j,c,state):
  if run['status']!='completed':
   journal.event(run,'task_completed',{'agent_id':'claude','gate':'independent-coding-contract-and-reviewed-pr'})
   run['status']='completed';journal.save(run)
+ need(ticket_context(client.get(j['ticket_id']))==private_json(d/'ticket-context.json'),'Ticket changed during PR publication')
  payload=stage(d);trace=deliver(payload,c['trace_host'],c['trace_identity'])
  score=deliver({'kind':'score','trace_id':payload['trace_id'],'root_span_id':payload['root_span_id'],'passed':True},c['trace_host'],c['trace_identity'])
  need(trace['trace_observed'] and score['score_observed'] and score['value'] is True,'Backend proof missing')
