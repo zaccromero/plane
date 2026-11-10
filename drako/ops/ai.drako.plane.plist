@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>ai.drako.plane</string>
+  <key>ProgramArguments</key><array><string>__HOME__/.local/bin/drako-plane-up</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>900</integer>
+  <key>EnvironmentVariables</key><dict><key>HOME</key><string>__HOME__</string></dict>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/drako-plane.out.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/drako-plane.err.log</string>
+</dict></plist>
