@@ -12,12 +12,15 @@ umask 077
 mkdir -p "$OUT"
 
 colima status --profile "$PROFILE" >/dev/null 2>&1 || { echo "plane-backup: profile $PROFILE is not running; nothing dumped" >&2; exit 1; }
-db="$(docker --context "$CTX" ps --format '{{.ID}} {{.Image}}' | awk '$2 ~ /postgres/ {print $1; exit}')"
+# The database container: a postgres image, preferring the one actually named as the db.
+db="$(docker --context "$CTX" ps --format '{{.ID}} {{.Image}} {{.Names}}' | awk '$2 ~ /postgres/ {if ($3 ~ /db/) {print $1; found=1; exit} if (!first) first=$1} END {if (!found && first) print first}')"
 [ -n "$db" ] || { echo "plane-backup: no running Postgres container in $PROFILE" >&2; exit 1; }
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 tmp="$OUT/.plane-$stamp.sql.gz.partial"
-docker --context "$CTX" exec "$db" sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$tmp"
+# Credentials come from the database container's own environment. -w never prompts: a
+# missing password fails the job instead of hanging an unattended run on "Password:".
+docker --context "$CTX" exec "$db" sh -c 'PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-}}" exec pg_dumpall -w -U "${POSTGRES_USER:-${PGUSER:-postgres}}"' </dev/null | gzip > "$tmp" || true
 # A dump that is empty or lacks the issues table is a failure, not a backup.
 gzip -dc "$tmp" | grep -q 'CREATE TABLE public.issues' || { rm -f "$tmp"; echo "plane-backup: dump has no issues table; discarded" >&2; exit 1; }
 mv "$tmp" "$OUT/plane-$stamp.sql.gz"

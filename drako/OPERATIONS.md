@@ -30,8 +30,8 @@ while running.
 Into a scratch database first, to prove the dump before trusting it:
 
 ```bash
-db="$(docker --context colima-drako-plane ps --format '{{.ID}} {{.Image}}' | awk '$2 ~ /postgres/ {print $1; exit}')"
-gzip -dc ~/.local/state/drako-plane/backups/plane-<UTC>.sql.gz | docker --context colima-drako-plane exec -i "$db" sh -c 'psql -U "$POSTGRES_USER" -d postgres'
+db="$(docker --context colima-drako-plane ps --format '{{.ID}} {{.Image}} {{.Names}}' | awk '$2 ~ /postgres/ && $3 ~ /db/ {print $1; exit}')"
+gzip -dc ~/.local/state/drako-plane/backups/plane-<UTC>.sql.gz | docker --context colima-drako-plane exec -i "$db" sh -c 'PGPASSWORD="${POSTGRES_PASSWORD:-}" psql -w -U "${POSTGRES_USER:-postgres}" -d postgres'
 ```
 
 `pg_dumpall` output recreates roles and databases; restoring over a live instance replaces
