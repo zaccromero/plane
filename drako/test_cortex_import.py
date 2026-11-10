@@ -149,6 +149,31 @@ class CortexImportTests(unittest.TestCase):
         self.assertEqual(len(data['name']), 255)
         self.assertIn('truncated on import', data['description_html'])
 
+    def test_rate_limit_is_waited_out_not_recorded_as_failure(self):
+        import io, urllib.error
+        client = ci.ImportPlane('http://127.0.0.1:8097', 'secret-token', 'w', 'p')
+        waits, calls = [], []
+        client.sleep = waits.append
+        class Reply:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, *a): return b'{"id": "i1"}'
+        def opener(req, timeout=None):
+            calls.append(req.get_method())
+            if len(calls) < 3:
+                raise urllib.error.HTTPError(req.full_url, 429, 'Too Many Requests', {'Retry-After': '7'}, io.BytesIO(b'{}'))
+            return Reply()
+        client.open = opener
+        self.assertEqual(client.create_issue({'name': 'x'}), ('i1', True))
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(waits.count(7.0), 2)
+        self.assertNotIn('secret-token', repr(waits))
+        client.open = lambda req, timeout=None: (_ for _ in ()).throw(
+            urllib.error.HTTPError(req.full_url, 429, 'Too Many Requests', {}, io.BytesIO(b'{}')))
+        with self.assertRaisesRegex(ValueError, 'rate limit'):
+            client.states()
+
     def test_expired_or_exposed_binding_is_refused(self):
         token = self.root / 'token'
         token.write_text('secret-token\n')

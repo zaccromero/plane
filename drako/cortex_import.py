@@ -30,6 +30,7 @@ import datetime as dt
 import html
 import json
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -47,6 +48,8 @@ PRIORITY = {'urgent': 'urgent', 'p0': 'urgent', 'high': 'high', 'p1': 'high', 'l
 MAX_NAME = 255
 MAX_BODY = 60000
 LABEL_COLOR = '#6b7280'
+PACE_SECONDS = 1.1      # Plane allows about 60 API requests a minute per key
+MAX_RATE_WAITS = 8      # a 429 waits for the window to reopen; it is never counted as a failed record
 
 
 def parse_frontmatter(text):
@@ -150,6 +153,32 @@ def payload(record, state_id, label_ids):
 class ImportPlane(ProjectPlane):
     """ProjectPlane plus the few list/create calls an import needs. Still one origin, no redirects."""
 
+    sleep = staticmethod(time.sleep)
+
+    def send(self, req):
+        """One request, paced, waiting out Plane's rate limit instead of failing the record."""
+        for _ in range(MAX_RATE_WAITS):
+            self.sleep(PACE_SECONDS)
+            try:
+                with self.open(req, timeout=15) as response:
+                    return None if response.status == 204 else json.load(response)
+            except urllib.error.HTTPError as error:
+                if error.code != 429:
+                    raise
+                try:
+                    wait = float(error.headers.get('Retry-After') or 20)
+                except (TypeError, ValueError):
+                    wait = 20.0
+                self.sleep(min(max(wait, 1.0), 65.0))
+        raise ValueError('Plane rate limit did not clear')
+
+    def request(self, method, path, data=None):
+        if not path.startswith('/') or '..' in path or '?' in path or '#' in path:
+            raise ValueError('Invalid project-relative API route')
+        return self.send(urllib.request.Request(self.base + self.prefix + path,
+            data=None if data is None else json.dumps(data).encode(), method=method,
+            headers={'X-API-Key': self.token, 'Content-Type': 'application/json'}))
+
     def paged(self, path):
         rows, cursor = [], None
         for _ in range(200):
@@ -158,8 +187,7 @@ class ImportPlane(ProjectPlane):
                 query['cursor'] = cursor
             req = urllib.request.Request(self.base + self.prefix + path + '?' + urllib.parse.urlencode(query),
                                          method='GET', headers={'X-API-Key': self.token})
-            with self.open(req, timeout=15) as response:
-                page = json.load(response)
+            page = self.send(req)
             if isinstance(page, list):
                 return rows + page
             rows += page.get('results', [])
@@ -229,7 +257,7 @@ def run(client, records, apply=False, limit=None):
             _, created = client.create_issue(payload(record, state_id, [known[n] for n in labels_for(record)]))
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as error:
             # A lost reply may still have written. The next run settles it through the 409 path.
-            summary['failed'].append({'id': record['id'], 'error': type(error).__name__})
+            summary['failed'].append({'id': record['id'], 'error': type(error).__name__ + (' %s' % error.code if isinstance(error, urllib.error.HTTPError) else '')})
             continue
         summary['created' if created else 'existing'] += 1
     return summary
